@@ -68,8 +68,10 @@ try {
     }
 
     if ($Pull) {
-        & git pull --ff-only
-        if ($LASTEXITCODE -ne 0) { throw 'Git fast-forward pull failed; no containers were changed.' }
+        & git fetch origin release/1.6.0
+        if ($LASTEXITCODE -ne 0) { throw 'Fetching the upstream release failed; no containers were changed.' }
+        & git merge --no-edit origin/release/1.6.0
+        if ($LASTEXITCODE -ne 0) { throw 'Merging the upstream release failed; no containers were changed. Resolve Git conflicts before retrying.' }
     }
 
     if ($Fresh) {
