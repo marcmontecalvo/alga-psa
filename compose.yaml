@@ -1,0 +1,197 @@
+name: alga-psa
+
+# Local deployment entrypoint. Upstream release files stay untouched: each
+# service inherits its current upstream definition, then only local changes
+# are applied here. Use "docker compose -f compose.yaml ..." from this checkout.
+services:
+  postgres:
+    extends:
+      file: docker-compose.ee.yaml
+      service: postgres
+    volumes:
+      - alga-psa-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    extends:
+      file: docker-compose.ee.yaml
+      service: redis
+
+  pgbouncer:
+    extends:
+      file: docker-compose.ee.yaml
+      service: pgbouncer
+
+  setup:
+    extends:
+      file: docker-compose.ee.yaml
+      service: setup
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+    secrets:
+      - db_password_hocuspocus
+
+  hocuspocus:
+    extends:
+      file: docker-compose.ee.yaml
+      service: hocuspocus
+    volumes:
+      - type: bind
+        source: ./secrets/db_password_hocuspocus
+        target: /run/secrets/db_password_hocuspocus
+        read_only: true
+    secrets:
+      - db_password_hocuspocus
+
+  temporal-dev:
+    extends:
+      file: docker-compose.ee.yaml
+      service: temporal-dev
+
+  server:
+    extends:
+      file: docker-compose.ee.yaml
+      service: server
+    container_name: !reset null
+    environment:
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      TEMPORAL_ADDRESS: temporal-dev:7233
+      EMAIL_ENABLE: "true"
+      EMAIL_PROVIDER_TYPE: smtp
+      EMAIL_HOST: mailpit
+      EMAIL_PORT: "1025"
+      EMAIL_USERNAME: noreply@local.test
+      EMAIL_PASSWORD: local-test
+      EMAIL_FROM: noreply@local.test
+      EMAIL_REJECT_UNAUTHORIZED: "false"
+      EMAIL_REQUIRE_TLS: "false"
+      VERIFY_EMAIL_ENABLED: "true"
+      ALGA_USAGE_STATS: "true"
+      NEXT_PUBLIC_ALGA_USAGE_STATS: "true"
+      POSTHOG_API_KEY: ${POSTHOG_PROJECT_TOKEN:-e2e_token_1239}
+      NEXT_PUBLIC_POSTHOG_API_KEY: ${POSTHOG_PROJECT_TOKEN:-e2e_token_1239}
+      POSTHOG_HOST: http://host.docker.internal:8010
+      NEXT_PUBLIC_POSTHOG_HOST: http://localhost:8010
+      NEXT_PUBLIC_POSTHOG_UI_HOST: http://localhost:8010
+      WATCHPACK_POLLING: ${WATCHPACK_POLLING:-true}
+      CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-true}
+    # Run code baked into the rebuilt image, not a Windows source bind mount.
+    # This avoids six large anonymous node_modules volumes on every recreate.
+    volumes: !override
+      - ngrok-data:/app/ngrok:ro
+      # These local PostHog adapters stay outside tracked upstream source.
+      - type: bind
+        source: ./local-overrides/packages/analytics/src/config/posthog.config.ts
+        target: /app/packages/analytics/src/config/posthog.config.ts
+        read_only: true
+      - type: bind
+        source: ./local-overrides/packages/core/src/lib/featureFlagRuntime.ts
+        target: /app/packages/core/src/lib/featureFlagRuntime.ts
+        read_only: true
+      - type: bind
+        source: ./local-overrides/server/src/config/posthog.config.ts
+        target: /app/server/src/config/posthog.config.ts
+        read_only: true
+    depends_on:
+      mailpit:
+        condition: service_started
+      temporal-dev:
+        condition: service_started
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: alga-psa_mailpit
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - app-network
+
+  workflow-worker:
+    extends:
+      file: docker-compose.ee.yaml
+      service: workflow-worker
+    profiles: [optional]
+    environment:
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      TEMPORAL_ADDRESS: temporal-dev:7233
+      WORKFLOW_WORKER_MODE: ${WORKFLOW_WORKER_MODE:-v2}
+      WORKFLOW_RUNTIME_V2_EVENT_CONSUMER_GROUP: ${WORKFLOW_RUNTIME_V2_EVENT_CONSUMER_GROUP:-workflow-runtime-v2}
+      LOG_LEVEL: ${WORKFLOW_WORKER_LOG_LEVEL:-debug}
+      WORKFLOW_WORKER_VERBOSE: ${WORKFLOW_WORKER_VERBOSE:-true}
+
+  email-service:
+    extends:
+      file: docker-compose.ee.yaml
+      service: email-service
+    profiles: [optional]
+
+  temporal-worker:
+    extends:
+      file: docker-compose.ee.yaml
+      service: temporal-worker
+    profiles: [optional]
+    environment:
+      TEMPORAL_ADDRESS: temporal-dev:7233
+
+  temporal-ui:
+    extends:
+      file: docker-compose.ee.yaml
+      service: temporal-ui
+    profiles: [optional]
+
+  ai-gateway-postgres:
+    extends:
+      file: docker-compose.base.yaml
+      service: ai-gateway-postgres
+    profiles: [optional]
+
+  ai-gateway:
+    extends:
+      file: docker-compose.base.yaml
+      service: ai-gateway
+    profiles: [optional]
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  ngrok-data:
+  ai-gateway-postgres-data:
+  alga-psa-postgres-data:
+    external: true
+    name: ${ALGA_PG_VOLUME:-alga-psa-postgres-data}
+
+secrets:
+  db_password_server:
+    file: ./secrets/db_password_server
+  db_password_hocuspocus:
+    file: ./secrets/db_password_hocuspocus
+  postgres_password:
+    file: ./secrets/postgres_password
+  redis_password:
+    file: ./secrets/redis_password
+  email_password:
+    file: ./secrets/email_password
+  crypto_key:
+    file: ./secrets/crypto_key
+  token_secret_key:
+    file: ./secrets/token_secret_key
+  nextauth_secret:
+    file: ./secrets/nextauth_secret
+  credential_encryption_key:
+    file: ./secrets/credential_encryption_key
+  google_oauth_client_id:
+    file: ./secrets/google_oauth_client_id
+  google_oauth_client_secret:
+    file: ./secrets/google_oauth_client_secret
+  alga_auth_key:
+    file: ./secrets/alga_auth_key
+  ninjaone_client_id:
+    file: ./secrets/ninjaone_client_id
+  ninjaone_client_secret:
+    file: ./secrets/ninjaone_client_secret
