@@ -1,58 +1,71 @@
 name: alga-psa
 
-# Local deployment entrypoint. Upstream release files stay untouched: each
-# service inherits its current upstream definition, then only local changes
-# are applied here. Use "docker compose -f compose.yaml ..." from this checkout.
+# Local, non-production EE evaluation. Upstream Compose files stay unchanged.
+# Build the current EE source into a production image (no Next dev server).
 services:
   postgres:
     extends:
-      file: docker-compose.ee.yaml
+      file: docker-compose.prebuilt.ee.yaml
       service: postgres
     volumes:
       - alga-psa-postgres-data:/var/lib/postgresql/data
+    ports: !reset []
 
   redis:
     extends:
-      file: docker-compose.ee.yaml
+      file: docker-compose.prebuilt.ee.yaml
       service: redis
+    ports: !reset []
 
   pgbouncer:
     extends:
-      file: docker-compose.ee.yaml
+      file: docker-compose.prebuilt.ee.yaml
       service: pgbouncer
+    ports: !reset []
 
   setup:
     extends:
-      file: docker-compose.ee.yaml
+      file: docker-compose.prebuilt.ee.yaml
       service: setup
+    image: ${ALGA_EE_IMAGE:-alga-psa-ee-local:release-1.6.0}
     environment:
       DB_HOST: postgres
       DB_PORT: "5432"
-    secrets:
-      - db_password_hocuspocus
-
-  hocuspocus:
-    extends:
-      file: docker-compose.ee.yaml
-      service: hocuspocus
-    volumes:
-      - type: bind
-        source: ./secrets/db_password_hocuspocus
-        target: /run/secrets/db_password_hocuspocus
-        read_only: true
-    secrets:
-      - db_password_hocuspocus
+      SETUP_RUN_SEEDS: "false"
 
   temporal-dev:
     extends:
       file: docker-compose.ee.yaml
       service: temporal-dev
+    ports: !reset []
 
   server:
     extends:
-      file: docker-compose.ee.yaml
+      file: docker-compose.prebuilt.ee.yaml
       service: server
+    image: ${ALGA_EE_IMAGE:-alga-psa-ee-local:release-1.6.0}
+    volumes:
+      - type: bind
+        source: ./local-bootstrap.sh
+        target: /usr/local/bin/local-bootstrap.sh
+        read_only: true
+      - type: bind
+        source: ./local-email-check.cjs
+        target: /app/server/local-email-check.cjs
+        read_only: true
+      - type: bind
+        source: ./packages/db/package.json
+        target: /app/packages/db/package.json
+        read_only: true
+    build:
+      context: .
+      dockerfile: ee/server/Dockerfile.build
+      args:
+        NEXT_BUILD_MAX_OLD_SPACE_SIZE: "12288"
+        NEXT_PUBLIC_ALGA_USAGE_STATS: "false"
     container_name: !reset null
+    ports: !override
+      - "127.0.0.1:3000:3000"
     environment:
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
       TEMPORAL_ADDRESS: temporal-dev:7233
@@ -66,102 +79,60 @@ services:
       EMAIL_REJECT_UNAUTHORIZED: "false"
       EMAIL_REQUIRE_TLS: "false"
       VERIFY_EMAIL_ENABLED: "true"
-      ALGA_USAGE_STATS: "true"
-      NEXT_PUBLIC_ALGA_USAGE_STATS: "true"
-      POSTHOG_API_KEY: ${POSTHOG_PROJECT_TOKEN:-e2e_token_1239}
-      NEXT_PUBLIC_POSTHOG_API_KEY: ${POSTHOG_PROJECT_TOKEN:-e2e_token_1239}
-      POSTHOG_HOST: http://host.docker.internal:8010
-      NEXT_PUBLIC_POSTHOG_HOST: http://localhost:8010
-      NEXT_PUBLIC_POSTHOG_UI_HOST: http://localhost:8010
-      WATCHPACK_POLLING: ${WATCHPACK_POLLING:-true}
-      CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-true}
-    # Run code baked into the rebuilt image, not a Windows source bind mount.
-    # This avoids six large anonymous node_modules volumes on every recreate.
-    volumes: !override
-      - ngrok-data:/app/ngrok:ro
-      # These local PostHog adapters stay outside tracked upstream source.
-      - type: bind
-        source: ./local-overrides/packages/analytics/src/config/posthog.config.ts
-        target: /app/packages/analytics/src/config/posthog.config.ts
-        read_only: true
-      - type: bind
-        source: ./local-overrides/packages/core/src/lib/featureFlagRuntime.ts
-        target: /app/packages/core/src/lib/featureFlagRuntime.ts
-        read_only: true
-      - type: bind
-        source: ./local-overrides/server/src/config/posthog.config.ts
-        target: /app/server/src/config/posthog.config.ts
-        read_only: true
-    depends_on:
+      ALGA_USAGE_STATS: "false"
+      NEXT_PUBLIC_ALGA_USAGE_STATS: "false"
+      POSTHOG_API_KEY: ""
+      NEXT_PUBLIC_POSTHOG_API_KEY: ""
+      POSTHOG_HOST: ""
+      NEXT_PUBLIC_POSTHOG_HOST: ""
+      NEXT_PUBLIC_POSTHOG_UI_HOST: ""
+    depends_on: !override
+      setup:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_started
+      pgbouncer:
+        condition: service_started
+      redis:
+        condition: service_started
       mailpit:
         condition: service_started
       temporal-dev:
         condition: service_started
 
   mailpit:
-    image: axllent/mailpit:latest
-    container_name: alga-psa_mailpit
-    environment:
-      MP_SMTP_AUTH_ACCEPT_ANY: "1"
-      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    image: axllent/mailpit:v1.27.11
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
     networks:
       - app-network
 
+  # Source-built background workers are opt-in for workflow/IMAP testing.
   workflow-worker:
     extends:
-      file: docker-compose.ee.yaml
+      file: docker-compose.prebuilt.ee.yaml
       service: workflow-worker
-    profiles: [optional]
-    environment:
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-      TEMPORAL_ADDRESS: temporal-dev:7233
-      WORKFLOW_WORKER_MODE: ${WORKFLOW_WORKER_MODE:-v2}
-      WORKFLOW_RUNTIME_V2_EVENT_CONSUMER_GROUP: ${WORKFLOW_RUNTIME_V2_EVENT_CONSUMER_GROUP:-workflow-runtime-v2}
-      LOG_LEVEL: ${WORKFLOW_WORKER_LOG_LEVEL:-debug}
-      WORKFLOW_WORKER_VERBOSE: ${WORKFLOW_WORKER_VERBOSE:-true}
+    profiles: [workers]
 
   email-service:
     extends:
-      file: docker-compose.ee.yaml
+      file: docker-compose.prebuilt.ee.yaml
       service: email-service
-    profiles: [optional]
+    profiles: [workers]
 
   temporal-worker:
     extends:
       file: docker-compose.ee.yaml
       service: temporal-worker
-    profiles: [optional]
-    environment:
-      TEMPORAL_ADDRESS: temporal-dev:7233
-
-  temporal-ui:
-    extends:
-      file: docker-compose.ee.yaml
-      service: temporal-ui
-    profiles: [optional]
-
-  ai-gateway-postgres:
-    extends:
-      file: docker-compose.base.yaml
-      service: ai-gateway-postgres
-    profiles: [optional]
-
-  ai-gateway:
-    extends:
-      file: docker-compose.base.yaml
-      service: ai-gateway
-    profiles: [optional]
+    profiles: [workers]
 
 networks:
   app-network:
     driver: bridge
 
 volumes:
-  ngrok-data:
-  ai-gateway-postgres-data:
+  files_data:
   alga-psa-postgres-data:
     external: true
     name: ${ALGA_PG_VOLUME:-alga-psa-postgres-data}

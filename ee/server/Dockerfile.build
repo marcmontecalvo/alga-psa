@@ -35,7 +35,9 @@ FROM deps AS builder
 ARG NEXTAUTH_SECRET_BUILD="dev-placeholder-nextauth-secret-32"
 ARG NEXT_BUILD_MAX_OLD_SPACE_SIZE="12288"
 ARG NEXT_PUBLIC_FORCE_FEATURE_FLAGS=""
+ARG NEXT_PUBLIC_ALGA_USAGE_STATS="false"
 ENV NEXT_PUBLIC_FORCE_FEATURE_FLAGS=${NEXT_PUBLIC_FORCE_FEATURE_FLAGS}
+ENV NEXT_PUBLIC_ALGA_USAGE_STATS=${NEXT_PUBLIC_ALGA_USAGE_STATS}
 ENV NODE_OPTIONS="--max-old-space-size=${NEXT_BUILD_MAX_OLD_SPACE_SIZE}"
 ENV NEXTAUTH_SECRET=${NEXTAUTH_SECRET_BUILD}
 ENV AUTH_SECRET=${NEXTAUTH_SECRET_BUILD}
@@ -56,6 +58,7 @@ ENV USE_PREBUILT="true"
 # Copy EE files and build enterprise edition
 COPY scripts/ ./scripts/
 ENV NEXT_PUBLIC_EDITION=enterprise
+ENV NEXT_PUBLIC_ALGA_USAGE_STATS=false
 RUN ./scripts/build-enterprise.sh
 
 WORKDIR /app/server
@@ -135,6 +138,9 @@ COPY --from=builder /app/server/src/ ./server/src/
 # create-tenant.ts which the appliance bootstrap runs to seed the initial
 # tenant/admin. Without it the appliance install fails ERR_MODULE_NOT_FOUND.
 COPY --from=builder /app/server/scripts/ ./server/scripts/
+COPY --from=builder /app/ee/server/src/ ./ee/server/src/
+COPY --from=builder /app/ee/server/package.json ./ee/server/
+COPY --from=builder /app/ee/server/node_modules ./ee/server/node_modules
 COPY --from=builder /app/secrets ./secrets
 # The early deps stage lacks workspace manifests, so its install omits packages
 # such as @microsoft/teams-js. Reuse the full install that compiled the app;
@@ -149,6 +155,9 @@ COPY --from=builder /app/ee/server/migrations/ ./server/migrations/
 COPY packages/core/package.json /app/packages/core/package.json
 # Package the same compiled core used by the build for worker-state diagnostics.
 COPY --from=builder /app/packages/core/dist /app/packages/core/dist
+# The tenant bootstrap CLI imports the workspace DB facade at runtime.
+COPY packages/db/package.json /app/packages/db/package.json
+COPY --from=builder /app/packages/db/dist /app/packages/db/dist
 # Development validation creates next-env.d.ts and may update tsconfig; this
 # preserves the production entrypoint while supporting a nonroot runtime.
 RUN chown 1000:1000 /app/server /app/server/tsconfig.json

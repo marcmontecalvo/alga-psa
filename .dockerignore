@@ -43,6 +43,18 @@ build
 
 # Environment variables
 .env
+server/.env
+ee/server/.env
+secrets/
+.secrets/
+local-overrides/
+compose.yaml
+local-stack.ps1
+local-bootstrap.sh
+local-email-check.cjs
+LOCAL-DEPLOYMENT.md
+Dockerfile.dev.dockerignore
+ee/server/Dockerfile.build
 .env.local
 .env.*.local
 .env.development
