@@ -141,6 +141,7 @@ COPY --from=builder /app/server/scripts/ ./server/scripts/
 COPY --from=builder /app/ee/server/src/ ./ee/server/src/
 COPY --from=builder /app/ee/server/package.json ./ee/server/
 COPY --from=builder /app/ee/server/node_modules ./ee/server/node_modules
+COPY --from=builder /app/ee/server/seeds/ ./ee/server/seeds/
 COPY --from=builder /app/secrets ./secrets
 # The early deps stage lacks workspace manifests, so its install omits packages
 # such as @microsoft/teams-js. Reuse the full install that compiled the app;

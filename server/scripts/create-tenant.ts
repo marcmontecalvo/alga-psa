@@ -9,6 +9,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'node:module';
+import { runTenantOnboardingSeeds } from './lib/run-onboarding-seeds';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -139,6 +140,12 @@ async function main() {
       productCode,
       tenantId: initialTenantId
     });
+
+    // Hosted provisioning runs these after tenant creation through Temporal.
+    // The local appliance CLI must do the same itself so a clean tenant receives
+    // its standard roles, permission grants, and product reference data.
+    const appliedSeeds = await runTenantOnboardingSeeds(db, result.tenantId, productCode ?? 'psa');
+    console.log(`Onboarding seeds: ${appliedSeeds.join(', ')}`);
 
     // Put the new tenant into the onboarding-pending state so the admin lands in
     // the in-app onboarding wizard on first login. createTenantComplete (the
