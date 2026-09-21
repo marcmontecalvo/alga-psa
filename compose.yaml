@@ -28,6 +28,10 @@ services:
       file: docker-compose.prebuilt.ee.yaml
       service: setup
     image: ${ALGA_EE_IMAGE:-alga-psa-ee-local:release-1.6.0}
+    secrets: !override
+      - postgres_password
+      - db_password_server
+      - db_password_hocuspocus
     environment:
       DB_HOST: postgres
       DB_PORT: "5432"
@@ -38,6 +42,48 @@ services:
       file: docker-compose.ee.yaml
       service: temporal-dev
     ports: !reset []
+
+  # Hocuspocus provides the WebSocket transport used by live notifications,
+  # collaborative documents, and live ticket updates. Keep it source-built so
+  # its protocol stays aligned with the source-built EE server image.
+  hocuspocus:
+    image: alga-psa-hocuspocus
+    build:
+      context: .
+      dockerfile: hocuspocus/Dockerfile
+    ports:
+      - "127.0.0.1:1234:1234"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:1234/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    environment:
+      NODE_ENV: production
+      PORT: "1234"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME_HOCUSPOCUS: ${DB_NAME_HOCUSPOCUS:-hocuspocus}
+      DB_USER_HOCUSPOCUS: ${DB_USER_HOCUSPOCUS:-hocuspocus_user}
+      HOCUSPOCUS_JWT_SECRET: ${HOCUSPOCUS_JWT_SECRET}
+      COLLAB_PERSIST_API_URL: http://server:3000/api/internal/collab/persist
+      COLLAB_PERSIST_API_KEY: ${COLLAB_PERSIST_API_KEY:-alga-collab-persist-dev}
+      AI_DOCUMENT_API_URL: http://server:3000/api/v1/ai/document-assist
+    secrets:
+      - db_password_hocuspocus
+      - redis_password
+    networks:
+      - app-network
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
 
   server:
     extends:
@@ -86,6 +132,8 @@ services:
       POSTHOG_HOST: ""
       NEXT_PUBLIC_POSTHOG_HOST: ""
       NEXT_PUBLIC_POSTHOG_UI_HOST: ""
+      HOCUSPOCUS_JWT_SECRET: ${HOCUSPOCUS_JWT_SECRET}
+      COLLAB_PERSIST_API_KEY: ${COLLAB_PERSIST_API_KEY}
     depends_on: !override
       setup:
         condition: service_completed_successfully
@@ -99,6 +147,8 @@ services:
         condition: service_started
       temporal-dev:
         condition: service_started
+      hocuspocus:
+        condition: service_healthy
 
   mailpit:
     image: axllent/mailpit:v1.27.11

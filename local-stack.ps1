@@ -57,10 +57,23 @@ function Set-EnvValue([string]$Name, [string]$Value) {
     [System.IO.File]::WriteAllText($envFile, $content, [System.Text.UTF8Encoding]::new($false))
 }
 
+function New-LocalSecret {
+    $secretBytes = New-Object byte[] 32
+    $random = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $random.GetBytes($secretBytes) } finally { $random.Dispose() }
+    return [Convert]::ToBase64String($secretBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+}
+
 Push-Location $repo
 try {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw 'Docker CLI is not available.' }
     if (-not (Test-Path -LiteralPath $envFile)) { throw "Missing $envFile" }
+    foreach ($secretName in @('HOCUSPOCUS_JWT_SECRET', 'COLLAB_PERSIST_API_KEY')) {
+        if ([string]::IsNullOrWhiteSpace((Get-EnvValue $secretName ''))) {
+            Set-EnvValue $secretName (New-LocalSecret)
+            Write-Host "Generated local $secretName in .env."
+        }
+    }
     Invoke-Compose -Arguments @('config', '--quiet')
 
     if ($ValidateOnly) {
@@ -130,9 +143,10 @@ try {
     Invoke-Docker -Arguments @('run', '--rm', '--entrypoint', 'sh', $image, '-c', 'test -f /app/ee/server/src/lib/testing/tenant-creation.ts && test -f /app/packages/db/dist/lib/tenantDb.js && test -f /app/server/scripts/create-tenant.ts')
     $redisImage = @(& docker image ls --quiet alga-psa-redis)
     $poolerImage = @(& docker image ls --quiet alga-psa-pgbouncer)
+    $hocuspocusImage = @(& docker image ls --quiet alga-psa-hocuspocus)
     if ($LASTEXITCODE -ne 0) { throw 'Could not query supporting Docker images.' }
-    if ($sourceChanged -or $Rebuild -or -not $redisImage -or -not $poolerImage) {
-        Invoke-Compose -Arguments @('build', 'redis', 'pgbouncer')
+    if ($sourceChanged -or $Rebuild -or -not $redisImage -or -not $poolerImage -or -not $hocuspocusImage) {
+        Invoke-Compose -Arguments @('build', 'redis', 'pgbouncer', 'hocuspocus')
     }
     Invoke-Compose -Arguments @('up', '-d', '--no-build', 'postgres', 'redis', 'pgbouncer', 'mailpit')
     Invoke-Compose -Arguments @('up', '-d', '--no-build', '--no-deps', '--force-recreate', 'setup')
@@ -143,6 +157,7 @@ try {
         throw "Setup failed (exit $setupExit). Inspect: docker compose -f compose.yaml logs setup"
     }
 
+    Invoke-Compose -Arguments @('up', '-d', '--no-build', '--no-deps', '--wait', '--wait-timeout', '60', 'hocuspocus')
     Invoke-Compose -Arguments @('up', '-d', '--no-build', '--no-deps', 'temporal-dev')
     Invoke-Compose -Arguments @('up', '-d', '--no-build', '--no-deps', 'server')
 
