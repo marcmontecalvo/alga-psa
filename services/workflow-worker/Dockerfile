@@ -184,5 +184,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY --from=builder /app /app
 
+# The worker has no runtime need for root privileges. Keep the copied runtime
+# readable by the bundled Node user so Kubernetes can enforce runAsNonRoot.
+RUN chown -R node:node /app
+USER node
+
 ENV NODE_ENV=production
 ENTRYPOINT ["/app/entrypoint.sh"]
