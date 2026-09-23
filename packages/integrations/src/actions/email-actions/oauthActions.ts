@@ -79,10 +79,12 @@ export const initiateEmailOAuth = withAuth(async (
 
     if (!effectiveRedirectUri) {
       const base =
-        process.env.NEXT_PUBLIC_BASE_URL ||
-        (await secretProvider.getAppSecret('NEXT_PUBLIC_BASE_URL')) ||
+        process.env.APPLICATION_URL ||
+        (await secretProvider.getAppSecret('APPLICATION_URL')) ||
         process.env.NEXTAUTH_URL ||
         (await secretProvider.getAppSecret('NEXTAUTH_URL')) ||
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        (await secretProvider.getAppSecret('NEXT_PUBLIC_BASE_URL')) ||
         'http://localhost:3000';
       effectiveRedirectUri = `${base}/api/auth/${provider}/callback`;
     }

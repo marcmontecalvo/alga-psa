@@ -136,9 +136,10 @@ export class CalendarProviderService {
    * Generate webhook URL with proper environment-aware base URL
    */
   private generateWebhookUrl(path: string): string {
-    const baseUrl = process.env.NGROK_URL || 
-                    process.env.NEXT_PUBLIC_BASE_URL || 
+    const baseUrl = process.env.NGROK_URL ||
+                    process.env.APPLICATION_URL ||
                     process.env.NEXTAUTH_URL ||
+                    process.env.NEXT_PUBLIC_BASE_URL ||
                     'http://localhost:3000';
     return `${baseUrl}${path}`;
   }

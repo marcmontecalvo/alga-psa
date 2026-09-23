@@ -590,7 +590,7 @@ export const downloadThreecxTemplate = withAuth(async (
   const ee = await import('@alga-psa/ee-threecx/lib');
 
   const tenantSlug = buildTenantPortalSlug(tenant);
-  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL ?? '').trim();
+  const baseUrl = (process.env.APPLICATION_URL ?? process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? '').trim();
   const { knex } = await createTenantKnex(tenant);
   const country = await resolveTenantPhoneCountryCode(knex, tenant);
 
@@ -666,7 +666,7 @@ const EMPTY_THREECX_PHONEBOOK: import('@alga-psa/ee-threecx/lib').ThreecxPhonebo
 };
 
 function threecxEndpointBaseUrl(tenantSlug: string): string {
-  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL ?? '').trim().replace(/\/$/, '');
+  const baseUrl = (process.env.APPLICATION_URL ?? process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? '').trim().replace(/\/$/, '');
   return `${baseUrl}/api/telephony/3cx/${tenantSlug}/`;
 }
 

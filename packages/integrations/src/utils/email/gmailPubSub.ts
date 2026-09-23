@@ -28,6 +28,7 @@ export const GMAIL_PUBLISHER_ROLE = 'roles/pubsub.publisher';
  */
 export const GMAIL_BASE_URL_KEYS = [
   'NGROK_URL',
+  'APPLICATION_URL',
   'NEXT_PUBLIC_BASE_URL',
   'NEXTAUTH_URL',
   'PUBLIC_WEBHOOK_BASE_URL',

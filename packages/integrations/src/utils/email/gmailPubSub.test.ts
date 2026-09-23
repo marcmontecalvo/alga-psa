@@ -25,7 +25,7 @@ import {
   resolveGmailWebhookBaseUrl,
 } from './gmailPubSub';
 
-const BASE_URL_ENV = ['NGROK_URL', 'NEXT_PUBLIC_BASE_URL', 'NEXTAUTH_URL', 'PUBLIC_WEBHOOK_BASE_URL'];
+const BASE_URL_ENV = ['NGROK_URL', 'APPLICATION_URL', 'NEXT_PUBLIC_BASE_URL', 'NEXTAUTH_URL', 'PUBLIC_WEBHOOK_BASE_URL'];
 const savedEnv: Record<string, string | undefined> = {};
 
 beforeEach(() => {

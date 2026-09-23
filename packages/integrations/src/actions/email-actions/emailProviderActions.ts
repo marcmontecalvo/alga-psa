@@ -509,10 +509,12 @@ async function persistGoogleConfig(
   // URL from env-or-app-secret; the Gmail Pub/Sub path now owns one in
   // utils/email/gmailPubSub, but OAuth redirect URIs still hand-roll it.
   const baseUrl =
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    (await secretProvider.getAppSecret('NEXT_PUBLIC_BASE_URL')) ||
+    process.env.APPLICATION_URL ||
+    (await secretProvider.getAppSecret('APPLICATION_URL')) ||
     process.env.NEXTAUTH_URL ||
     (await secretProvider.getAppSecret('NEXTAUTH_URL')) ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    (await secretProvider.getAppSecret('NEXT_PUBLIC_BASE_URL')) ||
     'http://localhost:3000';
   const effectiveRedirectUri = `${baseUrl}/api/auth/google/callback`;
 
