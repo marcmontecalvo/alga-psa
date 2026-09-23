@@ -110,10 +110,12 @@ function sanitizeRedirectUri(
 
 async function getDeploymentBaseUrl(secretProvider: SecretProviderLike): Promise<string> {
   const configured =
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    (await secretProvider.getAppSecret('NEXT_PUBLIC_BASE_URL')) ||
+    process.env.APPLICATION_URL ||
+    (await secretProvider.getAppSecret('APPLICATION_URL')) ||
     process.env.NEXTAUTH_URL ||
-    (await secretProvider.getAppSecret('NEXTAUTH_URL'));
+    (await secretProvider.getAppSecret('NEXTAUTH_URL')) ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    (await secretProvider.getAppSecret('NEXT_PUBLIC_BASE_URL'));
 
   return normalizeBaseUrl(configured);
 }

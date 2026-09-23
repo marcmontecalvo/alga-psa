@@ -1,0 +1,70 @@
+name: Publish Alga Enterprise Image
+
+on:
+  push:
+    branches:
+      - local-release
+    paths:
+      - .github/workflows/publish-alga-ee.yml
+      - ee/server/**
+      - ee/packages/**
+      - ee/temporal-workflows/**
+      - server/**
+      - shared/**
+      - packages/**
+      - scripts/build-enterprise.sh
+      - .dockerignore
+      - .npmrc
+      - package.json
+      - package-lock.json
+      - tsconfig.json
+      - tsconfig.base.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: alga-ee-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and publish Alga Enterprise
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/marcmontecalvo/alga-psa-ee
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long,prefix=sha-
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ee/server/Dockerfile.build
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=alga-psa-ee
+          cache-to: type=gha,mode=max,scope=alga-psa-ee

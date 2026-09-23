@@ -222,10 +222,12 @@ function computeBaseUrl(envValue?: string | null): string {
 export async function getXeroDeploymentBaseUrl(secretProvider?: ISecretProvider): Promise<string> {
   const provider = secretProvider ?? await getSecretProviderInstance();
   const base =
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    (await provider.getAppSecret('NEXT_PUBLIC_BASE_URL')) ||
+    process.env.APPLICATION_URL ||
+    (await provider.getAppSecret('APPLICATION_URL')) ||
     process.env.NEXTAUTH_URL ||
     (await provider.getAppSecret('NEXTAUTH_URL')) ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    (await provider.getAppSecret('NEXT_PUBLIC_BASE_URL')) ||
     'http://localhost:3000';
 
   return computeBaseUrl(base);

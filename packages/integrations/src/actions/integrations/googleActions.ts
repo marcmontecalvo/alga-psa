@@ -47,10 +47,12 @@ function computeBaseUrl(envValue?: string | null): string {
 async function getDeploymentBaseUrl(): Promise<string> {
   const secretProvider = await getSecretProviderInstance();
   const base =
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    (await secretProvider.getAppSecret('NEXT_PUBLIC_BASE_URL')) ||
+    process.env.APPLICATION_URL ||
+    (await secretProvider.getAppSecret('APPLICATION_URL')) ||
     process.env.NEXTAUTH_URL ||
     (await secretProvider.getAppSecret('NEXTAUTH_URL')) ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    (await secretProvider.getAppSecret('NEXT_PUBLIC_BASE_URL')) ||
     'http://localhost:3000';
 
   return computeBaseUrl(base);

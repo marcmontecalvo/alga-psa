@@ -26,7 +26,7 @@ import {
   type MicrosoftProfileConsumer,
 } from './microsoftShared';
 import { invalidateEntraDirectConnectionOnRebind } from '../../lib/entraBindingInvalidation';
-import { computeEntraCallbackUrl } from '@alga-psa/shared/services/entra/entraCallbackUrl';
+import { computeEntraCallbackUrl, resolveEntraCallbackUrl } from '@alga-psa/shared/services/entra/entraCallbackUrl';
 import { resolveMicrosoftBindingCandidateProfile } from '../../lib/microsoftConsumerProfileResolution';
 import {
   backfillMicrosoftEmailProviderIssuerMetadata,
@@ -213,10 +213,12 @@ function computeBaseUrl(envValue?: string | null): string {
 async function getDeploymentBaseUrl(): Promise<string> {
   const secretProvider = await getSecretProviderInstance();
   const base =
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    (await secretProvider.getAppSecret('NEXT_PUBLIC_BASE_URL')) ||
+    process.env.APPLICATION_URL ||
+    (await secretProvider.getAppSecret('APPLICATION_URL')) ||
     process.env.NEXTAUTH_URL ||
     (await secretProvider.getAppSecret('NEXTAUTH_URL')) ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    (await secretProvider.getAppSecret('NEXT_PUBLIC_BASE_URL')) ||
     'http://localhost:3000';
 
   return computeBaseUrl(base);
@@ -1907,6 +1909,7 @@ export const getMicrosoftIntegrationStatus = withAuth(async (
     // as an unmigrated profile view without materializing rows.
     const baseUrl = await getDeploymentBaseUrl();
     const metadata = getVisibleMicrosoftIntegrationMetadata(baseUrl);
+    const entraRedirectUri = await resolveEntraCallbackUrl(await getSecretProviderInstance());
     const mspSsoProfile = await resolveMicrosoftProfileForConsumerReadOnly(tenant, 'msp_sso');
     const emailSetup = await getMicrosoftEmailSetupReadiness(tenant);
     const visibleProfiles = profiles.map((profile) => ({
@@ -1917,7 +1920,10 @@ export const getMicrosoftIntegrationStatus = withAuth(async (
     return {
       success: true,
       baseUrl,
-      redirectUris: metadata.redirectUris,
+      redirectUris: {
+        ...metadata.redirectUris,
+        ...(metadata.redirectUris.entra ? { entra: entraRedirectUri } : {}),
+      },
       scopes: metadata.scopes,
       config: {
         clientId: mspSsoProfile?.clientId,
